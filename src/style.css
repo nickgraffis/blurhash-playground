@@ -1,0 +1,5 @@
+@import './fonts/DankMono/stylesheet.css';
+
+pre {
+  font-family: 'Dank Mono', monospace;
+}
