@@ -1,97 +1,84 @@
-import React, { FC, useState } from 'react'
-import logo from './logo.svg'
-
+import React, { FC, useCallback, useRef, useState } from 'react'
+import { decode, encode } from 'blurhash'
+import { useDropzone } from 'react-dropzone'
+import { BlurhashCanvas } from "react-blurhash";
 type Props = { }
 
 export const App: FC<Props> = () => {
-  const [count, setCount] = useState<number>(0)
-  const [netlify, setNetlify] = useState<string | undefined>(undefined)
-  const [input, setInput] = useState<string>('')
+  const [blurhash, setBlurhash] = useState('')
+  const canvas = useRef<HTMLCanvasElement | null>(null);
 
-  const handleInput = (event: React.KeyboardEvent): void => {
-    if (event.key === 'Enter') fetchFromNetlify(input)
+  const uploadFile = (files: Blob[]) => {
+    if (files && files[0]) {
+      let reader = new FileReader();
+      reader.onload = (e) => {
+        if (!e.target) return null
+        const res = e.target.result as string;
+
+        const image = new Image();
+        const cv = canvas.current;
+        const ctx = cv?.getContext("2d");
+
+        image.onload = function () {
+          if (!ctx) return null
+          ctx.clearRect(0, 0, 200, 200);
+          ctx.drawImage(image, 0, 0, 200, 200);
+        };
+        image.src = res;
+        image.style.width = "200px";
+        image.style.height = "auto";
+
+        setTimeout(() => {
+          const imageData = ctx?.getImageData(0, 0, 150, 150);
+          if (imageData) {
+            const buffer = encode(imageData.data, 150, 150, 5, 5);
+            setBlurhash(buffer);
+          }
+        }, 500);
+      };
+      reader.readAsDataURL(files[0]);
+    }
   }
 
-  const handleChangeInput = (event: React.ChangeEvent<HTMLInputElement>): void => {
-    setInput(event.target.value)
-  }
+  const onDrop = useCallback(acceptedFiles => {
+    uploadFile(acceptedFiles);
+  }, [])
 
-  const fetchFromNetlify = (name?: string): void => {
-    const endpoint: string = '/api/hello-world' + (name ? '?name=' + name : '')
-    fetch(endpoint)
-    .then(
-      (res: any) => {
-        res.json().then((res: any) => setNetlify(res.message))
-      }
-    )
-  }
+  const {getRootProps, getInputProps, isDragActive} = useDropzone({onDrop})
 
   return (
-    <div className="text-center">
-      <header className="bg-[#282c34] min-h-screen flex flex-col items-center justify-center space-y-4 text-2xl text-white">
-        <img src={logo} className="h-[40vmin] animate-spinslow" alt="logo" />
-        <p>Hello Vite + React + Typescript + Netlify + TailwindCSS!</p>
-        <p>
-          <button className="bg-blueGray-400 p-2 rounded-md focus:outline-none" 
-          onClick={() => setCount((count) => count + 1)}
-          >
-            count is: {count}
-          </button>
-        </p>
-        <p>
-          <button className="bg-blueGray-400 p-2 rounded-md focus:outline-none"
-          onClick={() => fetchFromNetlify()}
-          >
-            Try Netlify
-          </button>
-        </p>
-        <p>Netlify Response from <code className="text-lime-400">/api/hello-world </code>:
-          <span className="text-[#61dafb]"> { netlify } </span>
-        </p>
-        <p className="space-y-2">
-          <p>Try Netlify with query string paramter. Enter name and press enter</p>
-          <input 
-          onKeyUp={handleInput} 
-          onChange={handleChangeInput}
-          value={input}
-          className="apperance-none bg-[#282c34] rounded-md border-blueGray-400 border-2 px-2 py-1" placeholder="What's Your Name?" 
-          />
-        </p>
-        <p>Netlify Response from <code className="text-lime-400">/api/hello-world?name= </code>:
-         <span className="text-[#61dafb]"> { netlify } </span>
-        </p>
-        <p>
-          Edit <code>App.tsx</code> and save to test HMR updates.
-        </p>
-        <p>
-          <a
-            className="text-[#61dafb]"
-            href="https://reactjs.org"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Learn React
-          </a>
-          {' | '}
-          <a
-            className="text-[#61dafb]"
-            href="https://vitejs.dev/guide/features.html"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Vite Docs
-          </a>
-          {' | '}
-          <a
-            className="text-[#61dafb]"
-            href="https://docs.netlify.com"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Netlify Docs
-          </a>
-        </p>
-      </header>
+    <div className="min-h-screen bg-gray-50 py-6 flex flex-col justify-center relative overflow-hidden sm:py-12">
+        { 
+          blurhash &&
+          <div className="h-screen w-screen absolute inset-0">
+            <BlurhashCanvas
+              style={{ position: 'absolute', width: '100%', height: '100%' }}
+              hash={blurhash}
+              punch={1}
+            />
+          </div>
+        }
+      <div style={{ backgroundImage: "url('grid.svg')"}} className="w-screen h-screen absolute inset-0 bg-[url(./grid.svg)] bg-center">
+        <div className="mx-auto max-w-3xl py-16">
+          <p className="text-4xl font-black text-center">Blurhash Playground</p>
+          <div {...getRootProps()}>
+            <input {...getInputProps()} />
+            <div className="my-12 w-full p-12 shadow-xl bg-slate-300 rounded-xl h-full">
+              {
+                isDragActive ?
+                <p className="text-center text-3xl text-slate-500 font-black">Drop it!</p> :
+                <p className="text-center text-3xl text-slate-500 font-black">Drag image here</p>
+              }
+            </div>
+          </div>
+          { blurhash && 
+            <pre className="w-full px-4 py-2 rounded-lg bg-slate-800 text-pink-400">
+              {blurhash}
+            </pre>
+          }
+        </div>
+        <canvas ref={canvas} className="hidden" />
+      </div>
     </div>
   )
 }
